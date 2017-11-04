@@ -116,14 +116,15 @@ def mergeLines(diagLen, stLines):
                                 stLines[i][1] - stLines[j][1]) < 5:
                     curCloseIdx.append(j)
             if len(curCloseIdx) > 1:
-                maxNumIdx = curCloseIdx[0]
-                closeVotes = 0
+                votesSum = 0
+                weightedPhoSum = 0
+                weightedThetaSum = 0
                 for idx in curCloseIdx:
-                    closeVotes += stLines[idx][2]
-                    if stLines[idx][2] >= stLines[maxNumIdx][2]:
-                        maxNumIdx = idx
-                choosedLine = stLines[maxNumIdx]
-                # choosedLine[2] = closeVotes
+                    votesSum += stLines[idx][2]
+                for idx in curCloseIdx:
+                    weightedPhoSum += stLines[idx][0] * stLines[idx][2] / votesSum
+                    weightedThetaSum += stLines[idx][1] * stLines[idx][2] / votesSum
+                choosedLine = [weightedPhoSum, weightedThetaSum, votesSum / len(curCloseIdx)]
                 mergedResult.append(choosedLine)
                 for idx in curCloseIdx:
                     calculatedIdx.add(idx)
