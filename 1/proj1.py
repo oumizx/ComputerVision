@@ -97,7 +97,7 @@ def filterLines(accumulator):
     straightLines = []
     for rhoIdx in range(accumulator.shape[0]):
         for thetaIdx in range(accumulator.shape[1]):
-            if accumulator[rhoIdx, thetaIdx] > 0.3 * accumMax:
+            if accumulator[rhoIdx, thetaIdx] > 0.2 * accumMax:
                 rho = rhos[rhoIdx]
                 theta = thetas[thetaIdx]
                 straightLines.append([rho, np.rad2deg(theta), accumulator[rhoIdx, thetaIdx]])
@@ -106,24 +106,49 @@ def filterLines(accumulator):
 # If two lines rho and theta's difference are both lower than 5% of the range, lines will be merged.
 def mergeLines(diagLen, stLines):
     mergedResult = []
-    for i in range(len(stLines)):
+    calculatedIdx = set()
+    l = len(stLines)
+    for i in range(l - 1):
         curCloseIdx = [i]
-        for j in range(len(stLines)):
-            if abs(stLines[i][0] - stLines[j][0]) / (diagLen * 2) < 0.05 and abs(stLines[i][1] - stLines[j][1]) / 90 < 0.05:
-                curCloseIdx.append(j)
-        if len(curCloseIdx) > 1:
-            maxNumIdx = curCloseIdx[0]
-            # closeVotes = 0
-            for idx in curCloseIdx:
-                # closeVotes += stLines[idx][2]
-                if stLines[idx][2] >= stLines[maxNumIdx][2]:
-                    maxNumIdx = idx
-            if maxNumIdx == curCloseIdx[0]:
-                # stLines[i][2] = closeVotes
-                mergedResult.append(stLines[i])
-        else:
+        if i not in calculatedIdx:
+            for j in range(i + 1, l):
+                if abs(stLines[i][0] - stLines[j][0]) / (diagLen * 2) < 0.05 and abs(
+                                stLines[i][1] - stLines[j][1]) / 90 < 0.05:
+                    curCloseIdx.append(j)
+            if len(curCloseIdx) > 1:
+                maxNumIdx = curCloseIdx[0]
+                closeVotes = 0
+                for idx in curCloseIdx:
+                    closeVotes += stLines[idx][2]
+                    if stLines[idx][2] >= stLines[maxNumIdx][2]:
+                        maxNumIdx = idx
+                choosedLine = stLines[maxNumIdx]
+                # choosedLine[2] = closeVotes
+                mergedResult.append(choosedLine)
+                for idx in curCloseIdx:
+                    calculatedIdx.add(idx)
+    for i in range(l):
+        if i not in calculatedIdx:
             mergedResult.append(stLines[i])
     return mergedResult
+
+def plotMergedLines(mergedLines, input):
+    for line in mergedLines:
+        rho = line[0]
+        theta = np.deg2rad(line[1])
+        a = np.cos(theta)
+        b = np.sin(theta)
+        x0 = a * rho
+        y0 = b * rho
+        x1 = int(x0 + 1000 * (-b))
+        y1 = int(y0 + 1000 * (a))
+        x2 = int(x0 - 1000 * (-b))
+        y2 = int(y0 - 1000 * (a))
+        cv2.line(input, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    cv2.imshow('image', input)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 
 # # Let y = kx + b. [k, b]
 # def transferToXyCoord(diagLen, stLines):
@@ -134,62 +159,79 @@ def mergeLines(diagLen, stLines):
 #         stLinesInXyCoord.append([k, b])
 #     return stLinesInXyCoord
 
-def findParallelLinesGroup(stLines):
-    parallelLinesGroup = []
+def findParallelLinesPair(stLines):
+    parallelLinesPairs = []
     for i in range(len(stLines)):
         for j in range(i + 1, len(stLines)):
-            if abs(stLines[j][1] - stLines[i][1]) <= 5:
-                parallelLinesGroup.append([stLines[i], stLines[j]])
-    return parallelLinesGroup
+            if abs(stLines[i][1] - stLines[j][1]) <= 3 and abs(int(stLines[i][2]) - int(stLines[j][2])) < 0.15 * (int(stLines[i][2]) + int(stLines[j][2])):
+                parallelLinesPairs.append([stLines[i], stLines[j]])
+    return parallelLinesPairs
+
+def matchParallelLinesPairs(parallelLinesPairs):
+    validPairs = []
+    l = len(parallelLinesPairs)
+    for i in range(l - 1):
+        for j in range(i + 1, l):
+            beta_i = (parallelLinesPairs[i][0][1] + parallelLinesPairs[i][1][1]) / 2
+            beta_j = (parallelLinesPairs[j][0][1] + parallelLinesPairs[j][1][1]) / 2
+            avg_votes_i = (parallelLinesPairs[i][0][2] + parallelLinesPairs[i][1][2]) / 2
+            avg_votes_j = (parallelLinesPairs[j][0][2] + parallelLinesPairs[j][1][2]) / 2
+            ang_diff = abs(beta_i - beta_j)
+            rho_diff_i = abs(parallelLinesPairs[i][0][0] - parallelLinesPairs[i][1][0])
+            rho_diff_j = abs(parallelLinesPairs[j][0][0] - parallelLinesPairs[j][1][0])
+            if rho_diff_i != 0 and rho_diff_j != 0:
+                value1 = abs((rho_diff_i - avg_votes_j * np.sin(np.deg2rad(ang_diff))) / rho_diff_i)
+                value2 = abs((rho_diff_j - avg_votes_i * np.sin(np.deg2rad(ang_diff))) / rho_diff_j)
+                print("compare:", [value1, value2])
+                if max([value1, value2]) < 0.3:
+                    validPairs.append([parallelLinesPairs[i], parallelLinesPairs[j]])
+    return validPairs
+
 
 # Assume two lines: rho1 = x cos θ1 + y sin θ1, rho2 = x cos θ2 + y sin θ2
 # that is AX = b, where
 # A = [cos θ1  sin θ1]   b = |rho1|   X = |x|
 #     [cos θ2  sin θ2]       |rho2|       |y|
 # Solve x for intersection
-def findRectCoords(parallelLinesGroup, shape):
+def findRectCoords(validPairs, shape):
     intersections = []
-    for i in range(len(parallelLinesGroup)):
-        for j in range(i + 1, len(parallelLinesGroup)):
-            intersection = []
-            # calculate 4 intersection points
-            matchValid = True
-            for idxX in range(2):
-                for idxY in range(2):
-                    thetaDifference = abs(parallelLinesGroup[i][idxX][1] - parallelLinesGroup[j][idxY][1])
-                    # print("Theta difference for ", idxX, idxY, "for match", i, j, "is ", thetaDifference)
-                    if thetaDifference < 1:
-                        matchValid = False
-
-            if matchValid:
-                pointValid = True
-                for idxX in range(2):
-                    for idxY in range(2):
-                        pt, pointValid = calIntersection(parallelLinesGroup[i][idxX], parallelLinesGroup[j][idxY], shape)
-                        if pointValid:
-                            intersection.append(pt)
-                if len(intersection) == 4:
-                    intersections.append(intersection)
+    for pair in validPairs:
+        sameValue = False
+        p1, sameValue = calIntersection(pair[0][0], pair[1][0])
+        p2, sameValue = calIntersection(pair[0][0], pair[1][1])
+        p3, sameValue = calIntersection(pair[0][1], pair[1][0])
+        p4, sameValue = calIntersection(pair[0][1], pair[1][1])
+        if not sameValue:
+            intersection = [p1, p2, p3, p4]
+            intersectionValid = True
+            for point in intersection:
+                x = point[1]
+                y = point[0]
+                if x < 0 or x > shape[1] - 1 or y < 0 or y > shape[0] - 1:
+                    intersectionValid = False
+                    break
+            if intersectionValid:
+                intersections.append(intersection)
     return intersections
 
-
-def calIntersection(group1, group2, shape):
-    pointValid = True
+def calIntersection(group1, group2):
     rho1 = group1[0]
     theta1 = group1[1]
     rho2 = group2[0]
     theta2 = group2[1]
+    # if rho1 == rho2 and theta1 == theta2:
+    #     return None, True
     # print("cos(theta1):", np.cos(np.deg2rad(theta1)))
     A = np.array([[np.cos(np.deg2rad(theta1)), np.sin(np.deg2rad(theta1))], [np.cos(np.deg2rad(theta2)), np.sin(np.deg2rad(theta2))]])
     b = np.array([rho1, rho2])
-    result = np.linalg.solve(A, b)
+    try:
+        result = np.linalg.solve(A, b)
+    except:
+        return [0, 0], True
+    # To fix the edge index, we need to add 1 for row index and column index.
     x = int(result[0] + 1)
     y = int(result[1] + 1)
-    if x < 0 or x > shape[1] - 1 or y < 0 or y > shape[0] - 1:
-        pointValid = False
-    print("x, y, shape, point valid", x, y, shape, pointValid)
-    # To fix the edge index, we need to add 1 for row index and column index.
-    return [x, y], pointValid
+    return [x, y], False
 
 def findValidIntersection(intersections, input):
     validIntersections = []
@@ -207,23 +249,23 @@ def drawLines(intersections, imgName):
     input = cv2.imread(imgName, cv2.IMREAD_COLOR)
     num = 0
     for intersection in intersections:
-        connectLineIdx = []
-        connectLineDistance = []
-        for i in range(3):
-            for j in range(i + 1, 4):
-                connectLineIdx.append([i, j])
-                currentDistance = np.sqrt((intersection[j][0] - intersection[i][0]) ** 2 + (intersection[j][1] - intersection[i][1]) ** 2)
-                print("Current distance:", currentDistance)
-                connectLineDistance.append(currentDistance)
-        argSort = np.argsort(np.array(connectLineDistance))
-        print("Idx:", connectLineIdx)
-        print("Line distance:", connectLineDistance)
-        print("arg sort:", argSort)
-        for i in range(4):
-            lineIdx1 = connectLineIdx[argSort[i]][0]
-            lineIdx2 = connectLineIdx[argSort[i]][1]
-            print("current line index:", lineIdx1, lineIdx2)
-            cv2.line(input, (intersection[lineIdx1][0], intersection[lineIdx1][1]), (intersection[lineIdx2][0], intersection[lineIdx2][1]), (255, 0, 0), 2)
+        xSum = 0
+        ySum = 0
+        for point in intersection:
+            xSum += point[1]
+            ySum += point[0]
+        center = [ySum / 4, xSum / 4]
+        angle = []
+        for point in intersection:
+            dx = point[1] - center[1]
+            dy = point[0] - center[0]
+            angle.append(np.arctan2(dy, dx))
+        plotOrder = np.argsort(np.array(angle))
+        print("Angle:", angle)
+        print("Plot order:", plotOrder)
+        for idx in range(3):
+            cv2.line(input, (intersection[plotOrder[idx]][0], intersection[plotOrder[idx]][1]),(intersection[plotOrder[idx + 1]][0], intersection[plotOrder[idx + 1]][1]), (255, 0, 0), 2)
+        cv2.line(input, (intersection[plotOrder[3]][0], intersection[plotOrder[3]][1]),(intersection[plotOrder[0]][0], intersection[plotOrder[0]][1]), (255, 0, 0), 2)
 
         # Plot points and text
         for point in intersection:
@@ -235,7 +277,7 @@ def drawLines(intersections, imgName):
     cv2.destroyAllWindows()
 
 
-img = cv2.imread('TestImage2c.jpg', 0)
+img = cv2.imread('TestImage3.jpg', 0)
 shape = np.shape(img)
 rows = shape[0]
 cols = shape[1]
@@ -266,7 +308,7 @@ normalizedMagnitude = normalize(magnitude)
 print("normalized max:", normalizedMagnitude.max())
 print("normalized min:", normalizedMagnitude.min())
 th = otsu(normalizedMagnitude)
-t = threshold(normalizedMagnitude, 30)
+t = threshold(normalizedMagnitude, 25)
 # th, t2 = cv2.threshold(np.array(normalizedMagnitude, dtype=np.uint8), 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 # print('Th matrix:', t2)
 print('Threshold pack,', th)
@@ -285,17 +327,17 @@ print('max:', accumulator.max(), 'min:', accumulator.min())
 accumMax = accumulator.max()
 straightLines = filterLines(accumulator)
 mergedLines = mergeLines(diagLen, straightLines)
-print("straight lines:", straightLines)
+print("straight lines:", len(straightLines))
 print("merged straight lines:", mergedLines)
-# stLinesInXyCoord = transferToXyCoord(diagLen, mergedLines)
-# print("Straight lines in xy-coordinate:", stLinesInXyCoord)
-parallelLinesGroup = findParallelLinesGroup(mergedLines)
+# plotMergedLines(mergedLines, img)
+parallelLinesGroup = findParallelLinesPair(mergedLines)
 print("Parallel lines group:", parallelLinesGroup)
-intersections = findRectCoords(parallelLinesGroup, shape)
+validPairs = matchParallelLinesPairs(parallelLinesGroup)
+intersections = findRectCoords(validPairs, shape)
 print("Intersections:", intersections)
 # validIntersections = findValidIntersection(intersections, img)
 print("Valid intersections:", intersections)
-drawLines(intersections, 'TestImage2c.jpg')
+drawLines(intersections, 'TestImage3.jpg')
 
 
 
