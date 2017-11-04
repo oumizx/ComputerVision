@@ -113,7 +113,7 @@ def mergeLines(diagLen, stLines):
         if i not in calculatedIdx:
             for j in range(i + 1, l):
                 if abs(stLines[i][0] - stLines[j][0]) / (diagLen * 2) < 0.05 and abs(
-                                stLines[i][1] - stLines[j][1]) < 5:
+                                stLines[i][1] - stLines[j][1]) / 90 < 0.05:
                     curCloseIdx.append(j)
             if len(curCloseIdx) > 1:
                 votesSum = 0
@@ -133,7 +133,7 @@ def mergeLines(diagLen, stLines):
             mergedResult.append(stLines[i])
     return mergedResult
 
-def plotSeparateLines(mergedLines, input):
+def plotMergedLines(mergedLines, input):
     for line in mergedLines:
         rho = line[0]
         theta = np.deg2rad(line[1])
@@ -330,8 +330,7 @@ straightLines = filterLines(accumulator)
 mergedLines = mergeLines(diagLen, straightLines)
 print("straight lines:", len(straightLines))
 print("merged straight lines:", mergedLines)
-# plotSeparateLines(straightLines, img)
-# plotSeparateLines(mergedLines, img)
+# plotMergedLines(mergedLines, img)
 parallelLinesGroup = findParallelLinesPair(mergedLines)
 print("Parallel lines group:", parallelLinesGroup)
 validPairs = matchParallelLinesPairs(parallelLinesGroup)
