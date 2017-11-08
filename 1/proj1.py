@@ -173,7 +173,7 @@ def matchParallelLinesPairs(parallelLinesPairs):
                 value1 = abs((rho_diff_i - avg_votes_j * np.sin(np.deg2rad(ang_diff))) / rho_diff_i)
                 value2 = abs((rho_diff_j - avg_votes_i * np.sin(np.deg2rad(ang_diff))) / rho_diff_j)
                 print("compare:", [value1, value2])
-                if max([value1, value2]) <= 0.5:
+                if max([value1, value2]) <= 0.7:
                     validPairs.append([parallelLinesPairs[i], parallelLinesPairs[j]])
             # validPairs.append([parallelLinesPairs[i], parallelLinesPairs[j]])
     return validPairs
@@ -297,7 +297,7 @@ def findValidIntersectionForParallelogramHelper(point1, point2, input):
         return 0
     validPercentage = validCount / totalCount
     print("Valid Count, Total Count, valid percentage", validCount, totalCount, validPercentage)
-    if validPercentage > 0.90:
+    if validPercentage > 0.70:
         return 1
     else:
         return 0
@@ -331,7 +331,7 @@ def drawLines(intersections, imgName):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-fileName = 'TestImage3.jpg'
+fileName = 'TestImage1c.jpg'
 img = cv2.imread(fileName, 0)
 shape = np.shape(img)
 rows = shape[0]
@@ -363,7 +363,7 @@ normalizedMagnitude = normalize(magnitude)
 print("normalized max:", normalizedMagnitude.max())
 print("normalized min:", normalizedMagnitude.min())
 th = otsu(normalizedMagnitude)
-t = threshold(normalizedMagnitude, 20)
+t = threshold(normalizedMagnitude, 78)
 # th, t2 = cv2.threshold(np.array(normalizedMagnitude, dtype=np.uint8), 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 # print('Th matrix:', t2)
 print('Threshold pack,', th)
