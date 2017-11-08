@@ -97,7 +97,7 @@ def filterLines(accumulator):
     straightLines = []
     for rhoIdx in range(accumulator.shape[0]):
         for thetaIdx in range(accumulator.shape[1]):
-            if accumulator[rhoIdx, thetaIdx] > 0.2 * accumMax:
+            if accumulator[rhoIdx, thetaIdx] > 0.25 * accumMax:
                 rho = rhos[rhoIdx]
                 theta = thetas[thetaIdx]
                 straightLines.append([rho, np.rad2deg(theta), accumulator[rhoIdx, thetaIdx]])
@@ -112,7 +112,7 @@ def mergeLines(diagLen, stLines):
         curCloseIdx = [i]
         if i not in calculatedIdx:
             for j in range(i + 1, l):
-                if abs(stLines[i][0] - stLines[j][0]) / (diagLen * 2) < 0.05 and abs(
+                if abs(stLines[i][0] - stLines[j][0]) / (diagLen * 2) < 0.02 and abs(
                                 stLines[i][1] - stLines[j][1]) < 3:
                     curCloseIdx.append(j)
             if len(curCloseIdx) > 1:
@@ -153,7 +153,7 @@ def findParallelLinesPair(stLines):
     parallelLinesPairs = []
     for i in range(len(stLines)):
         for j in range(i + 1, len(stLines)):
-            if abs(stLines[i][1] - stLines[j][1]) <= 5 and abs(int(stLines[i][2]) - int(stLines[j][2])) < 0.15 * (int(stLines[i][2]) + int(stLines[j][2])):
+            if abs(stLines[i][1] - stLines[j][1]) <= 5 and abs(int(stLines[i][2]) - int(stLines[j][2])) < 0.3 * (int(stLines[i][2]) + int(stLines[j][2])):
                 parallelLinesPairs.append([stLines[i], stLines[j]])
     return parallelLinesPairs
 
@@ -255,7 +255,7 @@ def getValidMinDistanceOfIntersections(intersections, shape):
             distances.append(calDistance(intersection[i], intersection[i + 1]))
         distances.append(calDistance(intersection[3], intersection[0]))
         # print("Distances:", distances)
-        if min(distances) < shape[0] / 20:
+        if min(distances) < shape[0] / 10:
             continue
         validDistanceIntersections.append(intersection)
     return validDistanceIntersections
@@ -297,7 +297,7 @@ def findValidIntersectionForParallelogramHelper(point1, point2, input):
         return 0
     validPercentage = validCount / totalCount
     print("Valid Count, Total Count, valid percentage", validCount, totalCount, validPercentage)
-    if validPercentage > 0.95:
+    if validPercentage > 0.90:
         return 1
     else:
         return 0
@@ -331,7 +331,7 @@ def drawLines(intersections, imgName):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-fileName = 'TestImage2c.jpg'
+fileName = 'TestImage3.jpg'
 img = cv2.imread(fileName, 0)
 shape = np.shape(img)
 rows = shape[0]
@@ -363,7 +363,7 @@ normalizedMagnitude = normalize(magnitude)
 print("normalized max:", normalizedMagnitude.max())
 print("normalized min:", normalizedMagnitude.min())
 th = otsu(normalizedMagnitude)
-t = threshold(normalizedMagnitude, 30)
+t = threshold(normalizedMagnitude, 20)
 # th, t2 = cv2.threshold(np.array(normalizedMagnitude, dtype=np.uint8), 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
 # print('Th matrix:', t2)
 print('Threshold pack,', th)
